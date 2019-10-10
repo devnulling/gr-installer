@@ -15,7 +15,6 @@ chmod +x sdr.sh
 ./sdr.sh -u v3.14.1.1 -g maint-3.7
 ```
 ### Using an install
-    
 ```
 cd ~/sdr/installs/$INSTALL_PREFIX
 source setup.env
@@ -23,7 +22,6 @@ gnuradio-companion # or uhd_usrp_probe
 ```
 
 ### Installing OOTs
-    
 ```
 cd ~/sdr/installs/$INSTALL_PREFX
 cd oots/
