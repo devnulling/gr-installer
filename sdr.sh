@@ -211,7 +211,8 @@ write_env_file(){
 	SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python2.7/site-packages"
 	SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python2.7/dist-packages"
 	SDR_PKG_CONFIG="$SDR_BASE_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
-
+	SDR_GR_BLOCK_PATH="$SDR_BASE_PATH/share/gnuradio/grc/blocks"
+	SDR_RFNOC_PATH="$SDR_BASE_PATH/share/uhd/rfnoc/"
 
 	echo "Writing Environment File: $SDR_ENV_FILE"
 	echo "export BASE_PATH=$SDR_BASE_PATH" > $SDR_ENV_FILE
@@ -219,6 +220,8 @@ write_env_file(){
 	echo "export LD_LIBRARY_PATH=$SDR_LD_LIBRARY_PATH" >> $SDR_ENV_FILE
 	echo "export PYTHONPATH=$SDR_PYTHONPATH_1:$SDR_PYTHONPATH_2" >> $SDR_ENV_FILE
 	echo "export PKG_CONFIG_PATH=$SDR_PKG_CONFIG" >> $SDR_ENV_FILE
+	echo "export GRC_BLOCKS_PATH=$SDR_GR_BLOCK_PATH" >> $SDR_ENV_FILE
+	echo "export UHD_RFNOC_DIR=$SDR_RFNOC_PATH" >> $SDR_ENV_FILE
 }
 
 write_oot_builder(){
