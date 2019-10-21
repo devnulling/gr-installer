@@ -213,6 +213,7 @@ write_env_file(){
 	SDR_PKG_CONFIG="$SDR_BASE_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
 	SDR_GR_BLOCK_PATH="$SDR_BASE_PATH/share/gnuradio/grc/blocks"
 	SDR_RFNOC_PATH="$SDR_BASE_PATH/share/uhd/rfnoc/"
+	SDR_LIBRARY_PATH="$SDR_BASE_PATH/lib"
 
 	echo "Writing Environment File: $SDR_ENV_FILE"
 	echo "export BASE_PATH=$SDR_BASE_PATH" > $SDR_ENV_FILE
@@ -222,6 +223,7 @@ write_env_file(){
 	echo "export PKG_CONFIG_PATH=$SDR_PKG_CONFIG" >> $SDR_ENV_FILE
 	echo "export GRC_BLOCKS_PATH=$SDR_GR_BLOCK_PATH" >> $SDR_ENV_FILE
 	echo "export UHD_RFNOC_DIR=$SDR_RFNOC_PATH" >> $SDR_ENV_FILE
+	echo "export LIBRARY_PATH=$SDR_LIBRARY_PATH" >> $SDR_ENV_FILE
 }
 
 write_oot_builder(){
