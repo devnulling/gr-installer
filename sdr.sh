@@ -11,19 +11,6 @@
 
 set -e
 
-SDR_BASE_DIR="/home/$USER/sdr"
-SDR_INSTALL_TARGET="$SDR_BASE_DIR/installs"
-
-if [ ! -d "$SDR_BASE_DIR" ]; then
-    echo "$SDR_BASE_DIR does not exist, creating the folder"
-    mkdir -p $SDR_BASE_DIR
-fi
-
-if [ ! -d "$SDR_INSTALL_TARGET" ]; then
-    echo "$SDR_INSTALL_TARGET does not exist, creating the folder"
-    mkdir -p $SDR_INSTALL_TARGET
-fi
-
 RFNOC_INSTALL=NO
 E300_INSTALL=NO
 UHD_VERSION="master"
@@ -31,6 +18,12 @@ GR_VERSION="master"
 BUILD_CORES=7
 GR_FULL_INSTALL=NO
 INSTALL_DEPS=NO
+EXTRA_PREFIX=""
+EXTRA_PREIFX_ENABLED=NO
+DRY_RUN=NO
+FETCH_SOURCES=NO
+INSTALL_TARGET="installs"
+BASE_TARGET="sdr"
 
 while [[ $# -gt 0 ]]
 do
@@ -75,10 +68,51 @@ case $key in
     INSTALL_DEPS=YES
     shift 
     ;;
-   
+    # extra prefix
+    -p|--prefix)
+    EXTRA_PREFIX="$2"
+    EXTRA_PREIFX_ENABLED=YES
+    shift
+    shift
+    ;;
+    #dry
+    --dry)
+    DRY_RUN=YES
+    shift 
+    ;;
+    #dry
+    --fetch)
+    FETCH_SOURCES=YES
+    shift 
+    ;;
+    # target
+    -t|--target)
+    INSTALL_TARGET="$2"
+    shift
+    shift
+    ;;
+    # base target
+    -b|--base)
+    BASE_TARGET="$2"
+    shift
+    shift
+    ;;
+
 esac
 done
 
+SDR_BASE_DIR="/home/$USER/$BASE_TARGET"
+SDR_INSTALL_TARGET="$SDR_BASE_DIR/$INSTALL_TARGET"
+
+if [ ! -d "$SDR_BASE_DIR" ]; then
+    echo "$SDR_BASE_DIR does not exist, creating the folder"
+    mkdir -p $SDR_BASE_DIR
+fi
+
+if [ ! -d "$SDR_INSTALL_TARGET" ]; then
+    echo "$SDR_INSTALL_TARGET does not exist, creating the folder"
+    mkdir -p $SDR_INSTALL_TARGET
+fi
 
 if [ "$INSTALL_DEPS" == "YES" ]; then
 	# install deps
@@ -90,8 +124,15 @@ fi
 SDR_UHD_VERSION=$UHD_VERSION
 SDR_GR_VERSION=$GR_VERSION
 
-if [ "$RFNOC_INSTALL" == "YES" ]; then
+if [ "$RFNOC_INSTALL" == "YES" ] && [ "$EXTRA_PREIFX_ENABLED" == "YES" ]; then
+	SDR_INSTALL_UID="${EXTRA_PREFIX}_rfnoc_${SDR_UHD_VERSION}_${SDR_GR_VERSION}"
+
+elif [ "$RFNOC_INSTALL" == "YES" ] && [ "$EXTRA_PREIFX_ENABLED" == "NO" ]; then
 	SDR_INSTALL_UID="rfnoc_${SDR_UHD_VERSION}_${SDR_GR_VERSION}"
+
+elif [ "$RFNOC_INSTALL" == "NO" ] && [ "$EXTRA_PREIFX_ENABLED" == "YES" ]; then
+	SDR_INSTALL_UID="${EXTRA_PREFIX}_${SDR_UHD_VERSION}_${SDR_GR_VERSION}"
+
 else
 	SDR_INSTALL_UID="${SDR_UHD_VERSION}_${SDR_GR_VERSION}"
 fi
@@ -148,111 +189,161 @@ check_dir(){
 }
 
 create_dirs(){
-	mkdir -p $SDR_BASE_DIR
-	mkdir -p $SDR_SRC_TARGET
-	mkdir -p $SDR_INSTALL_TARGET
-	mkdir -p $SDR_INSTALL_BASE
-	mkdir -p $SDR_UHD_SRC_BASE
-	mkdir -p $SDR_OOT_DIR
+	if [ "$DRY_RUN" == "NO" ] || [ "$FETCH_SOURCES" == "YES" ]; then
+		mkdir -p $SDR_BASE_DIR
+		mkdir -p $SDR_SRC_TARGET
+		mkdir -p $SDR_INSTALL_TARGET
+		mkdir -p $SDR_INSTALL_BASE
+		mkdir -p $SDR_UHD_SRC_BASE
+		mkdir -p $SDR_OOT_DIR
+	fi
 }
 
 install_uhd(){
-	cd $SDR_SRC_TARGET
-	check_dir
+	if [ "$DRY_RUN" == "NO" ]; then
+		cd $SDR_SRC_TARGET
+		check_dir
 
-	git clone --recursive https://github.com/ettusresearch/uhd $SDR_UHD_SRC_BASE
+		git clone --recursive https://github.com/ettusresearch/uhd $SDR_UHD_SRC_BASE
 
-	cd "$SDR_UHD_SRC_BASE/"
-	check_dir
+		cd "$SDR_UHD_SRC_BASE/"
+		check_dir
 
-	git checkout $SDR_UHD_VERSION
-	git submodule update --init --recursive
+		git checkout $SDR_UHD_VERSION
+		git submodule update --init --recursive
 
-	cd "$SDR_UHD_SRC_BASE/host"
-	check_dir
+		cd "$SDR_UHD_SRC_BASE/host"
+		check_dir
 
-	mkdir -p "$SDR_UHD_SRC_BASE/host/build"
-	cd "$SDR_UHD_SRC_BASE/host/build"
-	check_dir
+		mkdir -p "$SDR_UHD_SRC_BASE/host/build"
+		cd "$SDR_UHD_SRC_BASE/host/build"
+		check_dir
 
-	echo $SDR_UHD_CMAKE
+		echo $SDR_UHD_CMAKE
 
-	eval $SDR_UHD_CMAKE
-	make -j${BUILD_CORES}
-	make install
-	source $SDR_ENV_FILE
-	uhd_usrp_probe --version
-	uhd_images_downloader
+		eval $SDR_UHD_CMAKE
+		make -j${BUILD_CORES}
+		make install
+		source $SDR_ENV_FILE
+		uhd_usrp_probe --version
+		uhd_images_downloader
+	else
+		echo $SDR_UHD_CMAKE
+	fi
+
+	if [ "$DRY_RUN" == "YES" ] || [ "$FETCH_SOURCES" == "YES" ]; then
+		cd $SDR_SRC_TARGET
+		check_dir
+
+		git clone --recursive https://github.com/ettusresearch/uhd $SDR_UHD_SRC_BASE
+
+		cd "$SDR_UHD_SRC_BASE/"
+		check_dir
+
+		git checkout $SDR_UHD_VERSION
+		git submodule update --init --recursive
+
+		cd "$SDR_UHD_SRC_BASE/host"
+		check_dir
+
+		mkdir -p "$SDR_UHD_SRC_BASE/host/build"
+		cd "$SDR_UHD_SRC_BASE/host/build"
+		check_dir
+
+	fi
 }
 
 install_gr(){
-	cd $SDR_SRC_TARGET
-	check_dir
-	git clone -b $SDR_GR_VERSION --recursive https://github.com/gnuradio/gnuradio $SDR_GR_SRC_BASE
-	cd $SDR_GR_SRC_BASE
-	check_dir
-	git checkout $SDR_GR_VERSION
-	git submodule update --init --recursive
-	mkdir -p "${SDR_GR_SRC_BASE}/build"
-	cd "${SDR_GR_SRC_BASE}/build"
-	check_dir
-	
-	echo $SDR_GR_CMAKE
-	eval $SDR_GR_CMAKE
-	make -j${BUILD_CORES}
-	make install
-	gnuradio-config-info --version
+	if [ "$DRY_RUN" == "NO" ]; then
+		cd $SDR_SRC_TARGET
+		check_dir
+		git clone -b $SDR_GR_VERSION --recursive https://github.com/gnuradio/gnuradio $SDR_GR_SRC_BASE
+		cd $SDR_GR_SRC_BASE
+		check_dir
+		git checkout $SDR_GR_VERSION
+		git submodule update --init --recursive
+		mkdir -p "${SDR_GR_SRC_BASE}/build"
+		cd "${SDR_GR_SRC_BASE}/build"
+		check_dir
+		
+		echo $SDR_GR_CMAKE
+		eval $SDR_GR_CMAKE
+		make -j${BUILD_CORES} VERBOSE=ON
+		make install
+		gnuradio-config-info --version
+	else
+		echo $SDR_GR_CMAKE
+	fi
+
+	if [ "$DRY_RUN" == "YES" ] || [ "$FETCH_SOURCES" == "YES" ]; then
+		cd $SDR_SRC_TARGET
+		check_dir
+		git clone -b $SDR_GR_VERSION --recursive https://github.com/gnuradio/gnuradio $SDR_GR_SRC_BASE
+		cd $SDR_GR_SRC_BASE
+		check_dir
+		git checkout $SDR_GR_VERSION
+		git submodule update --init --recursive
+		mkdir -p "${SDR_GR_SRC_BASE}/build"
+		cd "${SDR_GR_SRC_BASE}/build"
+		check_dir
+		
+	fi
 }
 
 write_env_file(){
-	SDR_BASE_PATH="$SDR_INSTALL_BASE"
-	SDR_PATH="$SDR_BASE_PATH/bin:$PATH"
-	SDR_LD_LIBRARY_PATH="$SDR_BASE_PATH/lib:$LD_LIBRARY_PATH"
-	SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python2.7/site-packages"
-	SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python2.7/dist-packages"
-	SDR_PKG_CONFIG="$SDR_BASE_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
-	SDR_GR_BLOCK_PATH="$SDR_BASE_PATH/share/gnuradio/grc/blocks"
-	SDR_RFNOC_PATH="$SDR_BASE_PATH/share/uhd/rfnoc/"
-	SDR_LIBRARY_PATH="$SDR_BASE_PATH/lib"
+	if [ "$DRY_RUN" == "NO" ] || [ "$FETCH_SOURCES" == "YES" ]; then
+		SDR_BASE_PATH="$SDR_INSTALL_BASE"
+		SDR_PATH="$SDR_BASE_PATH/bin:$PATH"
+		SDR_LD_LIBRARY_PATH="$SDR_BASE_PATH/lib:$LD_LIBRARY_PATH"
+		SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python2.7/site-packages"
+		SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python2.7/dist-packages"
+		SDR_PKG_CONFIG="$SDR_BASE_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
+		SDR_GR_BLOCK_PATH="$SDR_BASE_PATH/share/gnuradio/grc/blocks"
+		SDR_RFNOC_PATH="$SDR_BASE_PATH/share/uhd/rfnoc/"
+		SDR_LIBRARY_PATH="$SDR_BASE_PATH/lib"
 
-	echo "Writing Environment File: $SDR_ENV_FILE"
-	echo "export BASE_PATH=$SDR_BASE_PATH" > $SDR_ENV_FILE
-	echo "export PATH=$SDR_PATH" >> $SDR_ENV_FILE
-	echo "export LD_LIBRARY_PATH=$SDR_LD_LIBRARY_PATH" >> $SDR_ENV_FILE
-	echo "export PYTHONPATH=$SDR_PYTHONPATH_1:$SDR_PYTHONPATH_2" >> $SDR_ENV_FILE
-	echo "export PKG_CONFIG_PATH=$SDR_PKG_CONFIG" >> $SDR_ENV_FILE
-	echo "export GRC_BLOCKS_PATH=$SDR_GR_BLOCK_PATH" >> $SDR_ENV_FILE
-	echo "export UHD_RFNOC_DIR=$SDR_RFNOC_PATH" >> $SDR_ENV_FILE
-	echo "export LIBRARY_PATH=$SDR_LIBRARY_PATH" >> $SDR_ENV_FILE
+		echo "Writing Environment File: $SDR_ENV_FILE"
+		echo "export BASE_PATH=$SDR_BASE_PATH" > $SDR_ENV_FILE
+		echo "export PATH=$SDR_PATH" >> $SDR_ENV_FILE
+		echo "export LD_LIBRARY_PATH=$SDR_LD_LIBRARY_PATH" >> $SDR_ENV_FILE
+		echo "export PYTHONPATH=$SDR_PYTHONPATH_1:$SDR_PYTHONPATH_2" >> $SDR_ENV_FILE
+		echo "export PKG_CONFIG_PATH=$SDR_PKG_CONFIG" >> $SDR_ENV_FILE
+		echo "export GRC_BLOCKS_PATH=$SDR_GR_BLOCK_PATH" >> $SDR_ENV_FILE
+		echo "export UHD_RFNOC_DIR=$SDR_RFNOC_PATH" >> $SDR_ENV_FILE
+		echo "export LIBRARY_PATH=$SDR_LIBRARY_PATH" >> $SDR_ENV_FILE
+	fi
+
+
 }
 
 write_oot_builder(){
+	if [ "$DRY_RUN" == "NO" ] || [ "$FETCH_SOURCES" == "YES" ]; then
+		echo "Writing OOT Builder"
 
-	echo "Writing OOT Builder"
+		echo "#!/bin/bash" > $SDR_OOT_BUILDER_FILE
+		echo "SDR_INSTALL_BASE=\"$SDR_INSTALL_BASE\"" >> $SDR_OOT_BUILDER_FILE
+		echo "SDR_CMAKE_COMMAND=\"cmake -DCMAKE_INSTALL_PREFIX=\$SDR_INSTALL_BASE -DUHD_DIR=\$SDR_INSTALL_BASE/lib/cmake/uhd/ -DUHD_INCLUDE_DIRS=\$SDR_INSTALL_BASE/include/ -DUHD_LIBRARIES=\$SDR_INSTALL_BASE/lib/libuhd.so -DGNURADIO_ALL_INCLUDE_DIRS=\$SDR_INSTALL_BASE/include/ -DGNURADIO_RUNTIME_LIBRARY_DIRS=\$SDR_INSTALL_BASE/lib/ ../\"" >> $SDR_OOT_BUILDER_FILE
+		echo "SDR_OOT_DIR=\"$SDR_OOT_DIR\"" >> $SDR_OOT_BUILDER_FILE
+		echo "cd \$SDR_INSTALL_BASE" >> $SDR_OOT_BUILDER_FILE
+		echo "source \$SDR_INSTALL_BASE/setup.env" >> $SDR_OOT_BUILDER_FILE
+		echo "cd \$1" >> $SDR_OOT_BUILDER_FILE
 
-	echo "#!/bin/bash" > $SDR_OOT_BUILDER_FILE
-	echo "SDR_INSTALL_BASE=\"$SDR_INSTALL_BASE\"" >> $SDR_OOT_BUILDER_FILE
-	echo "SDR_CMAKE_COMMAND=\"cmake -DCMAKE_INSTALL_PREFIX=\$SDR_INSTALL_BASE -DUHD_DIR=\$SDR_INSTALL_BASE/lib/cmake/uhd/ -DUHD_INCLUDE_DIRS=\$SDR_INSTALL_BASE/include/ -DUHD_LIBRARIES=\$SDR_INSTALL_BASE/lib/libuhd.so -DGNURADIO_ALL_INCLUDE_DIRS=\$SDR_INSTALL_BASE/include/ -DGNURADIO_RUNTIME_LIBRARY_DIRS=\$SDR_INSTALL_BASE/lib/ ../\"" >> $SDR_OOT_BUILDER_FILE
-	echo "SDR_OOT_DIR=\"$SDR_OOT_DIR\"" >> $SDR_OOT_BUILDER_FILE
-	echo "cd \$SDR_INSTALL_BASE" >> $SDR_OOT_BUILDER_FILE
-	echo "source \$SDR_INSTALL_BASE/setup.env" >> $SDR_OOT_BUILDER_FILE
-	echo "cd \$1" >> $SDR_OOT_BUILDER_FILE
-
-	echo "if [ -d \"build/\" ]; then" >> $SDR_OOT_BUILDER_FILE
-	echo "    echo \"[ INFO ] - Build folder found, rebuilding...\"" >> $SDR_OOT_BUILDER_FILE
-	echo "    cd build" >> $SDR_OOT_BUILDER_FILE
-	echo "    make uninstall" >> $SDR_OOT_BUILDER_FILE
-	echo "    cd .." >> $SDR_OOT_BUILDER_FILE
-	echo "    rm -rvf build/" >> $SDR_OOT_BUILDER_FILE
-	echo "fi" >> $SDR_OOT_BUILDER_FILE
+		echo "if [ -d \"build/\" ]; then" >> $SDR_OOT_BUILDER_FILE
+		echo "    echo \"[ INFO ] - Build folder found, rebuilding...\"" >> $SDR_OOT_BUILDER_FILE
+		echo "    cd build" >> $SDR_OOT_BUILDER_FILE
+		echo "    make uninstall" >> $SDR_OOT_BUILDER_FILE
+		echo "    cd .." >> $SDR_OOT_BUILDER_FILE
+		echo "    rm -rvf build/" >> $SDR_OOT_BUILDER_FILE
+		echo "fi" >> $SDR_OOT_BUILDER_FILE
 
 
-	echo "mkdir build" >> $SDR_OOT_BUILDER_FILE
-	echo "cd build" >> $SDR_OOT_BUILDER_FILE
-	echo "eval \$SDR_CMAKE_COMMAND" >> $SDR_OOT_BUILDER_FILE
-	echo "make -j${BUILD_CORES}" >> $SDR_OOT_BUILDER_FILE
-	echo "make install" >> $SDR_OOT_BUILDER_FILE
-	chmod +x $SDR_OOT_BUILDER_FILE
+		echo "mkdir build" >> $SDR_OOT_BUILDER_FILE
+		echo "cd build" >> $SDR_OOT_BUILDER_FILE
+		echo "eval \$SDR_CMAKE_COMMAND" >> $SDR_OOT_BUILDER_FILE
+		echo "make -j${BUILD_CORES}" >> $SDR_OOT_BUILDER_FILE
+		echo "make install" >> $SDR_OOT_BUILDER_FILE
+		chmod +x $SDR_OOT_BUILDER_FILE
+	fi
 }
 
 create_dirs
