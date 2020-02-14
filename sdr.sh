@@ -7,7 +7,9 @@
 # cd /home/$user/sdr
 # ./sdr.sh -u $UHD_VERSION -g $GR_VERSION
 # ./sdr.sh -u v3.14.1.1 -g maint-3.7
-# currently only works with GR 3.7.x.x (python path needs to be updated for 3.8.x.x)
+
+# TODO
+# test dry run / clone only options 
 
 set -e
 
@@ -24,6 +26,12 @@ DRY_RUN=NO
 FETCH_SOURCES=NO
 INSTALL_TARGET="installs"
 BASE_TARGET="sdr"
+GR_BASE_REPO="gnuradio/gnuradio"
+UHD_BASE_REPO="ettusresearch/uhd"
+GR38=NO
+GR_BRANCH="master"
+GRPR=NO
+PR=0
 
 while [[ $# -gt 0 ]]
 do
@@ -97,10 +105,58 @@ case $key in
     shift
     shift
     ;;
-
+    # GR repo
+    -m|--gr_repo)
+    GR_BASE_REPO="$2"
+    shift
+    shift
+    ;;
+    # UHD repo
+    -n|--uhd_repo)
+    UHD_BASE_REPO="$2"
+    shift
+    shift
+    ;;
+    #dry
+    --gr38)
+    GR38=YES
+    shift 
+    ;;
+    # GNU Radio version
+    --gr_branch)
+    GR_BRANCH="$2"
+    shift
+    shift
+    ;;
+    #dry
+    --grpr)
+    GRPR=YES
+    shift 
+    ;;
+    # GNU Radio version
+    --pr)
+    PR="$2"
+    shift
+    shift
+    ;;
+    #dry
 esac
 done
 
+if [ "$GRPR" == "YES" ]; then
+	UHD_VERSION="v3.15.0.0"
+	GR38=YES
+	GR_FULL_INSTALL=YES
+	GR_VERSION="$(/usr/bin/python3 /home/user/sdr/gethub.py -p ${PR} -g branch)"  #branch name
+	GR_BRANCH="$(/usr/bin/python3 /home/user/sdr/gethub.py -p ${PR} -g branch)" #branch name
+	GR_BASE_REPO="$(/usr/bin/python3 /home/user/sdr/gethub.py -p ${PR} -g repo)" # user/gnuradio
+
+	echo "BUILDING"
+	echo "--------------"
+	echo "Repo: ${GR_BASE_REPO}"
+	echo "Branch: ${GR_BRANCH}"
+	echo "--------------"
+fi
 SDR_BASE_DIR="/home/$USER/$BASE_TARGET"
 SDR_INSTALL_TARGET="$SDR_BASE_DIR/$INSTALL_TARGET"
 
@@ -137,6 +193,11 @@ else
 	SDR_INSTALL_UID="${SDR_UHD_VERSION}_${SDR_GR_VERSION}"
 fi
 
+if [ "$GRPR" == "YES" ]; then
+	SDR_INSTALL_UID="gr_${PR}"
+fi
+
+
 SDR_INSTALL_BASE="$SDR_INSTALL_TARGET/$SDR_INSTALL_UID"
 SDR_SRC_TARGET="$SDR_INSTALL_BASE/src"
 SDR_UHD_SRC_BASE="$SDR_SRC_TARGET/uhd"
@@ -144,6 +205,7 @@ SDR_GR_SRC_BASE="$SDR_SRC_TARGET/gnuradio"
 SDR_ENV_FILE="$SDR_INSTALL_BASE/setup.env"
 SDR_OOT_DIR="$SDR_INSTALL_BASE/oots"
 SDR_OOT_BUILDER_FILE="$SDR_INSTALL_BASE/oot.sh"
+SDR_REBUILD_FILE="$SDR_INSTALL_BASE/rebuild.sh"
 
 if [ "$GR_FULL_INSTALL" == "YES" ]; then
 	SDR_GR_CMAKE="cmake -DCMAKE_INSTALL_PREFIX=$SDR_INSTALL_BASE -DUHD_DIR=$SDR_INSTALL_BASE/lib/cmake/uhd/ -DUHD_INCLUDE_DIRS=$SDR_INSTALL_BASE/include/ -DUHD_LIBRARIES=$SDR_INSTALL_BASE/lib/libuhd.so ../"
@@ -204,7 +266,7 @@ install_uhd(){
 		cd $SDR_SRC_TARGET
 		check_dir
 
-		git clone --recursive https://github.com/ettusresearch/uhd $SDR_UHD_SRC_BASE
+		git clone --recursive "https://github.com/${UHD_BASE_REPO}" $SDR_UHD_SRC_BASE
 
 		cd "$SDR_UHD_SRC_BASE/"
 		check_dir
@@ -235,7 +297,7 @@ install_uhd(){
 		cd $SDR_SRC_TARGET
 		check_dir
 
-		git clone --recursive https://github.com/ettusresearch/uhd $SDR_UHD_SRC_BASE
+		git clone --recursive "https://github.com/${UHD_BASE_REPO}" $SDR_UHD_SRC_BASE
 
 		cd "$SDR_UHD_SRC_BASE/"
 		check_dir
@@ -257,10 +319,11 @@ install_gr(){
 	if [ "$DRY_RUN" == "NO" ]; then
 		cd $SDR_SRC_TARGET
 		check_dir
-		git clone -b $SDR_GR_VERSION --recursive https://github.com/gnuradio/gnuradio $SDR_GR_SRC_BASE
+		git clone --recursive "https://github.com/${GR_BASE_REPO}" $SDR_GR_SRC_BASE
 		cd $SDR_GR_SRC_BASE
 		check_dir
-		git checkout $SDR_GR_VERSION
+		#git checkout $SDR_GR_VERSION
+		git checkout $GR_BRANCH
 		git submodule update --init --recursive
 		mkdir -p "${SDR_GR_SRC_BASE}/build"
 		cd "${SDR_GR_SRC_BASE}/build"
@@ -268,7 +331,7 @@ install_gr(){
 		
 		echo $SDR_GR_CMAKE
 		eval $SDR_GR_CMAKE
-		make -j${BUILD_CORES} VERBOSE=ON
+		make -j${BUILD_CORES} #VERBOSE=ON
 		make install
 		gnuradio-config-info --version
 	else
@@ -278,10 +341,11 @@ install_gr(){
 	if [ "$DRY_RUN" == "YES" ] || [ "$FETCH_SOURCES" == "YES" ]; then
 		cd $SDR_SRC_TARGET
 		check_dir
-		git clone -b $SDR_GR_VERSION --recursive https://github.com/gnuradio/gnuradio $SDR_GR_SRC_BASE
+		git clone --recursive "https://github.com/${GR_BASE_REPO}" $SDR_GR_SRC_BASE
 		cd $SDR_GR_SRC_BASE
 		check_dir
-		git checkout $SDR_GR_VERSION
+		#git checkout $SDR_GR_VERSION
+		git checkout $GR_BRANCH
 		git submodule update --init --recursive
 		mkdir -p "${SDR_GR_SRC_BASE}/build"
 		cd "${SDR_GR_SRC_BASE}/build"
@@ -295,8 +359,15 @@ write_env_file(){
 		SDR_BASE_PATH="$SDR_INSTALL_BASE"
 		SDR_PATH="$SDR_BASE_PATH/bin:$PATH"
 		SDR_LD_LIBRARY_PATH="$SDR_BASE_PATH/lib:$LD_LIBRARY_PATH"
-		SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python2.7/site-packages"
-		SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python2.7/dist-packages"
+
+		if [ "$GR38" == "NO" ]; then
+			SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python2.7/site-packages"
+			SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python2.7/dist-packages"
+		else 
+			SDR_PYTHONPATH_1="$SDR_BASE_PATH/lib/python3/site-packages"
+			SDR_PYTHONPATH_2="$SDR_BASE_PATH/lib/python3/dist-packages"
+		fi
+
 		SDR_PKG_CONFIG="$SDR_BASE_PATH/lib/pkgconfig:$PKG_CONFIG_PATH"
 		SDR_GR_BLOCK_PATH="$SDR_BASE_PATH/share/gnuradio/grc/blocks"
 		SDR_RFNOC_PATH="$SDR_BASE_PATH/share/uhd/rfnoc/"
@@ -343,6 +414,9 @@ write_oot_builder(){
 		echo "make -j${BUILD_CORES}" >> $SDR_OOT_BUILDER_FILE
 		echo "make install" >> $SDR_OOT_BUILDER_FILE
 		chmod +x $SDR_OOT_BUILDER_FILE
+
+		echo $SDR_UHD_CMAKE > $SDR_REBUILD_FILE
+		echo $SDR_GR_CMAKE >> $SDR_REBUILD_FILE
 	fi
 }
 
